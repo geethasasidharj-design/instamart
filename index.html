@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swiggy Instamart - Grocery Delivery (Fixed)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* (kept your original CSS; omitted here for brevity in the preview) */
+    body { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; padding:0; overflow-x:hidden; }
+    * { box-sizing: border-box; }
+    .app-wrapper { width:100%; min-height:100%; font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    :focus-visible { outline: 2px solid #FC8019; outline-offset:2px; }
+    .product-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .product-card:hover { transform: translateY(-4px); box-shadow:0 12px 24px rgba(0,0,0,0.12); }
+    .category-chip { transition: all 0.2s ease; }
+    .category-chip:hover { transform: translateY(-1px); }
+    .cart-badge-animate { animation: popIn 0.3s cubic-bezier(0.68,-0.55,0.265,1.55); }
+    @keyframes popIn { 0%{transform:scale(0.8);}50%{transform:scale(1.1);}100%{transform:scale(1);} }
+    .toast-notification { animation: slideDown 0.3s ease-out; }
+    @keyframes slideDown { from { transform:translate(-50%,-120%); opacity:0 } to { transform:translate(-50%,0); opacity:1 } }
+    .stock-indicator { font-size:11px; font-weight:600; }
+    .stock-high { color:#60A917; } .stock-medium{ color:#F09819; } .stock-low{ color:#E23744; } .stock-critical{ color:#D32F2F; animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
+    .add-button { transition: all 0.2s ease; }
+    .add-button:active { transform: scale(0.95); }
+    .quantity-control { transition: background-color 0.15s ease; }
+    .shimmer { background: linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%); background-size:200% 100%; animation: shimmer 1.5s infinite; }
+    @keyframes shimmer { 0%{background-position:200% 0;}100%{background-position:-200% 0;} }
+    .cart-panel { max-height: calc(100% - 80px); }
+    .scrollbar-thin::-webkit-scrollbar { width:6px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background:#f1f1f1; border-radius:10px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background:#FC8019; border-radius:10px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background:#e67316; }
+    .product-image-placeholder { background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); display:flex; align-items:center; justify-content:center; font-size:32px; border-radius:12px; }
+    .error-shake { animation: shake 0.4s ease-in-out; }
+    @keyframes shake { 0%,100%{transform:translateX(0);}25%{transform:translateX(-8px);}75%{transform:translateX(8px);} }
+  </style>
+ </head>
+ <body>
+  <div class="app-wrapper">
+   <!-- Toast -->
+   <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden">
+    <div class="toast-notification bg-white rounded-xl shadow-2xl px-5 py-3 flex items-center gap-3 border-l-4 min-w-[280px]" id="toast-content">
+     <div id="toast-icon" class="text-2xl flex-shrink-0"></div>
+     <div class="flex-1">
+      <p id="toast-message" class="text-sm font-semibold text-gray-800"></p>
+      <p id="toast-submessage" class="text-xs text-gray-600 mt-0.5"></p>
+     </div>
+    </div>
+   </div>
+
+   <!-- Header (same as original) -->
+   <header class="sticky top-0 z-40 bg-white shadow-md">
+     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+       <div class="flex items-center justify-between h-16">
+         <div class="flex items-center gap-4">
+           <div class="flex items-center gap-3">
+             <svg class="w-12 h-12" viewbox="0 0 48 48" fill="none"><rect width="48" height="48" rx="10" fill="#FC8019" /> <path d="M14 24L20 30L34 16" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+             <div><h1 id="store-name" class="text-xl font-bold text-gray-900">Swiggy Instamart</h1><p id="delivery-tagline" class="text-xs text-gray-600">Delivery in 10 minutes</p></div>
+           </div>
+         </div>
+
+         <div class="hidden md:flex flex-1 max-w-xl mx-8">
+           <form id="search-form" class="w-full" role="search"><label for="search-input" class="sr-only">Search for products</label>
+             <div class="relative"><input type="text" id="search-input" placeholder="Search for atta, dal, curd, milk and more..." class="w-full pl-11 pr-4 py-2.5 rounded-lg border-2 border-gray-200 focus:border-orange-500 focus:outline-none text-sm transition-colors">
+               <svg class="w-5 h-5 absolute left-3.5 top-3 text-gray-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+             </div>
+           </form>
+         </div>
+
+         <button id="cart-btn" type="button" class="relative flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-colors shadow-md" aria-label="View shopping cart">
+           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+           <span class="hidden sm:inline">Cart</span>
+           <span id="cart-badge" class="absolute -top-2 -right-2 bg-white text-orange-500 text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-md cart-badge-animate">0</span>
+         </button>
+       </div>
+     </div>
+   </header>
+
+   <!-- Main (same structure) -->
+   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+     <div class="flex flex-col lg:flex-row gap-6">
+       <section class="flex-1" aria-labelledby="products-heading">
+         <div class="bg-gradient-to-r from-orange-400 to-orange-600 rounded-2xl p-6 md:p-8 mb-6 text-white shadow-lg">
+           <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+             <div class="flex-1">
+               <h2 id="hero-title" class="text-3xl md:text-4xl font-extrabold mb-2">Groceries in minutes</h2>
+               <p id="hero-subtitle" class="text-base md:text-lg opacity-95 mb-4">Fresh produce, pantry staples &amp; more delivered to your door</p>
+               <button id="cta-button" type="button" class="bg-white text-orange-600 px-6 py-2.5 rounded-full font-bold text-sm hover:bg-orange-50 transition-colors shadow-md"><span id="cta-text">Shop Now</span> →</button>
+             </div>
+             <div class="flex-shrink-0">
+               <div class="w-32 h-32 bg-white bg-opacity-20 rounded-full flex items-center justify-center backdrop-blur-sm"><span class="text-6xl">🛒</span></div>
+             </div>
+           </div>
+         </div>
+
+         <div class="mb-6">
+           <h3 class="text-lg font-bold text-gray-900 mb-3">Shop by Category</h3>
+           <div id="categories" class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin"></div>
+         </div>
+
+         <div class="mb-4">
+           <div class="flex items-center justify-between mb-3">
+             <h3 id="products-heading" class="text-lg font-bold text-gray-900"><span id="category-title">All Products</span> <span id="product-count" class="text-sm font-normal text-gray-500 ml-2"></span></h3>
+             <div class="flex items-center gap-2"><span class="text-xs text-gray-500">Stock Status:</span>
+               <div class="flex items-center gap-3 text-xs"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> High</span> <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> Low</span> <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> Critical</span></div>
+             </div>
+           </div>
+
+           <div id="products-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+         </div>
+       </section>
+
+       <aside class="lg:w-96 lg:sticky lg:top-20 h-fit" aria-labelledby="cart-heading">
+         <div class="bg-white rounded-2xl shadow-lg p-5 cart-panel">
+           <div class="flex items-center justify-between mb-4">
+             <h2 id="cart-heading" class="text-lg font-bold text-gray-900">Your Cart</h2>
+             <span id="cart-item-count" class="text-sm text-gray-500">0 items</span>
+           </div>
+           <div id="cart-items" class="space-y-3 mb-4 max-h-96 overflow-y-auto scrollbar-thin">
+             <div id="empty-cart" class="text-center py-8">
+               <div class="text-6xl mb-3">🛒</div>
+               <p class="text-gray-500 text-sm font-medium">Your cart is empty</p>
+               <p class="text-gray-400 text-xs mt-1">Add items to get started</p>
+             </div>
+           </div>
+
+           <div class="border-t border-gray-200 pt-4 space-y-2">
+             <div class="flex justify-between text-sm"><span class="text-gray-600">Subtotal</span> <span id="cart-subtotal" class="font-semibold text-gray-900">₹0</span></div>
+             <div class="flex justify-between text-sm"><span class="text-gray-600">Delivery Fee</span> <span class="text-green-600 font-semibold">FREE</span></div>
+             <div class="flex justify-between text-sm"><span class="text-gray-600">Handling Charges</span> <span id="cart-handling" class="font-semibold text-gray-900">₹5</span></div>
+             <div class="border-t border-gray-200 pt-2 mt-2">
+               <div class="flex justify-between"><span class="font-bold text-gray-900">Total</span> <span id="cart-total" class="font-bold text-orange-600 text-lg">₹0</span></div>
+             </div>
+           </div>
+
+           <button id="checkout-btn" type="button" class="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-sm transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed" disabled> Proceed to Checkout </button>
+           <p class="text-xs text-gray-400 text-center mt-3">💡 This is a demo store. No real transactions.</p>
+         </div>
+       </aside>
+     </div>
+   </main>
+
+   <footer class="bg-gray-900 text-white mt-12 py-8">
+     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+       <div class="text-center">
+         <p class="text-sm opacity-75">Demo Swiggy Instamart Store - Built with Canva Code</p>
+         <p class="text-xs opacity-50 mt-2">All product data and branding are for demonstration purposes only</p>
+       </div>
+     </div>
+   </footer>
+  </div>
+
+  <script>
+    // ============ CONFIGURATION ============
+    const defaultConfig = {
+      background_color: '#F9FAFB',
+      surface_color: '#FFFFFF',
+      text_color: '#111827',
+      primary_action_color: '#FC8019',
+      secondary_action_color: '#6B7280',
+      font_family: 'Inter',
+      font_size: 14,
+      store_name: 'Swiggy Instamart',
+      delivery_tagline: 'Delivery in 10 minutes',
+      hero_title: 'Groceries in minutes',
+      hero_subtitle: 'Fresh produce, pantry staples & more delivered to your door',
+      cta_text: 'Shop Now'
+    };
+
+    // ============ PRODUCT DATABASE ============
+    const PRODUCT_CATEGORIES = [
+      { id: 'all', name: 'All Products', icon: '🛒' },
+      { id: 'fruits', name: 'Fruits & Vegetables', icon: '🥬' },
+      { id: 'dairy', name: 'Dairy & Bakery', icon: '🥛' },
+      { id: 'snacks', name: 'Snacks & Beverages', icon: '🍿' },
+      { id: 'staples', name: 'Staples & Cooking', icon: '🌾' },
+      { id: 'personal', name: 'Personal Care', icon: '🧴' },
+      { id: 'household', name: 'Household Items', icon: '🧹' }
+    ];
+
+    const PRODUCTS_DATABASE = [
+      { id: 'banana', name: 'Fresh Bananas', price: 48, category: 'fruits', maxStock: 25, emoji: '🍌', unit: '1 dozen' },
+      { id: 'tomato', name: 'Tomatoes', price: 35, category: 'fruits', maxStock: 25, emoji: '🍅', unit: '1 kg' },
+      { id: 'onion', name: 'Onions', price: 42, category: 'fruits', maxStock: 25, emoji: '🧅', unit: '1 kg' },
+      { id: 'potato', name: 'Potatoes', price: 28, category: 'fruits', maxStock: 25, emoji: '🥔', unit: '1 kg' },
+      { id: 'apple', name: 'Fresh Apples', price: 165, category: 'fruits', maxStock: 25, emoji: '🍎', unit: '1 kg' },
+      { id: 'carrot', name: 'Carrots', price: 52, category: 'fruits', maxStock: 25, emoji: '🥕', unit: '500g' },
+      { id: 'spinach', name: 'Fresh Spinach', price: 25, category: 'fruits', maxStock: 25, emoji: '🥬', unit: '1 bunch' },
+      { id: 'cucumber', name: 'Cucumber', price: 38, category: 'fruits', maxStock: 25, emoji: '🥒', unit: '500g' },
+      { id: 'milk', name: 'Toned Milk', price: 58, category: 'dairy', maxStock: 25, emoji: '🥛', unit: '1L' },
+      { id: 'curd', name: 'Fresh Curd', price: 45, category: 'dairy', maxStock: 25, emoji: '🥣', unit: '400g' },
+      { id: 'paneer', name: 'Fresh Paneer', price: 95, category: 'dairy', maxStock: 25, emoji: '🧈', unit: '200g' },
+      { id: 'bread', name: 'Whole Wheat Bread', price: 42, category: 'dairy', maxStock: 25, emoji: '🍞', unit: '400g' },
+      { id: 'butter', name: 'Amul Butter', price: 58, category: 'dairy', maxStock: 25, emoji: '🧈', unit: '100g' },
+      { id: 'cheese', name: 'Cheese Slices', price: 135, category: 'dairy', maxStock: 25, emoji: '🧀', unit: '200g' },
+      { id: 'eggs', name: 'Farm Fresh Eggs', price: 72, category: 'dairy', maxStock: 25, emoji: '🥚', unit: '6 pcs' },
+      { id: 'chips', name: 'Lays Potato Chips', price: 20, category: 'snacks', maxStock: 25, emoji: '🥔', unit: '52g' },
+      { id: 'biscuits', name: 'Parle-G Biscuits', price: 25, category: 'snacks', maxStock: 25, emoji: '🍪', unit: '200g' },
+      { id: 'cola', name: 'Coca Cola', price: 80, category: 'snacks', maxStock: 25, emoji: '🥤', unit: '1.25L' },
+      { id: 'juice', name: 'Real Fruit Juice', price: 125, category: 'snacks', maxStock: 25, emoji: '🧃', unit: '1L' },
+      { id: 'tea', name: 'Tata Tea Gold', price: 185, category: 'snacks', maxStock: 25, emoji: '☕', unit: '250g' },
+      { id: 'coffee', name: 'Nescafe Coffee', price: 215, category: 'snacks', maxStock: 25, emoji: '☕', unit: '200g' },
+      { id: 'namkeen', name: 'Haldirams Namkeen', price: 45, category: 'snacks', maxStock: 25, emoji: '🥜', unit: '150g' },
+      { id: 'rice', name: 'Basmati Rice', price: 185, category: 'staples', maxStock: 25, emoji: '🍚', unit: '1 kg' },
+      { id: 'atta', name: 'Aashirvaad Atta', price: 245, category: 'staples', maxStock: 25, emoji: '🌾', unit: '5 kg' },
+      { id: 'dal', name: 'Toor Dal', price: 145, category: 'staples', maxStock: 25, emoji: '🫘', unit: '1 kg' },
+      { id: 'oil', name: 'Sunflower Oil', price: 185, category: 'staples', maxStock: 25, emoji: '🛢️', unit: '1L' },
+      { id: 'sugar', name: 'White Sugar', price: 48, category: 'staples', maxStock: 25, emoji: '🧂', unit: '1 kg' },
+      { id: 'salt', name: 'Tata Salt', price: 22, category: 'staples', maxStock: 25, emoji: '🧂', unit: '1 kg' },
+      { id: 'masala', name: 'Garam Masala', price: 85, category: 'staples', maxStock: 25, emoji: '🌶️', unit: '100g' },
+      { id: 'soap', name: 'Lux Soap', price: 35, category: 'personal', maxStock: 25, emoji: '🧼', unit: '125g' },
+      { id: 'shampoo', name: 'Dove Shampoo', price: 185, category: 'personal', maxStock: 25, emoji: '🧴', unit: '340ml' },
+      { id: 'toothpaste', name: 'Colgate Toothpaste', price: 95, category: 'personal', maxStock: 25, emoji: '🪥', unit: '200g' },
+      { id: 'facewash', name: 'Himalaya Face Wash', price: 145, category: 'personal', maxStock: 25, emoji: '🧴', unit: '150ml' },
+      { id: 'deo', name: 'Axe Deodorant', price: 225, category: 'personal', maxStock: 25, emoji: '💨', unit: '150ml' },
+      { id: 'detergent', name: 'Surf Excel', price: 285, category: 'household', maxStock: 25, emoji: '🧺', unit: '1 kg' },
+      { id: 'dishwash', name: 'Vim Dishwash', price: 125, category: 'household', maxStock: 25, emoji: '🧽', unit: '500ml' },
+      { id: 'floor-cleaner', name: 'Lizol Floor Cleaner', price: 185, category: 'household', maxStock: 25, emoji: '🧹', unit: '975ml' },
+      { id: 'tissue', name: 'Tissue Paper Roll', price: 85, category: 'household', maxStock: 25, emoji: '🧻', unit: '2 rolls' },
+      { id: 'garbage-bags', name: 'Garbage Bags', price: 95, category: 'household', maxStock: 25, emoji: '🗑️', unit: '30 pcs' }
+    ];
+
+    // ============ STATE MANAGEMENT ============
+    let currentStock = {};
+    let currentCategory = 'all';
+    let searchQuery = '';
+    let cartRecords = [];
+    let isProcessing = false;
+
+    // Initialize stock for all products
+    PRODUCTS_DATABASE.forEach(product => {
+      currentStock[product.id] = product.maxStock;
+    });
+
+    // ============ UTILITIES ============
+    function $(id) { return document.getElementById(id); }
+    function formatPrice(amount) { return '₹' + amount.toLocaleString('en-IN'); }
+
+    function getStockClass(stock, maxStock) {
+      const percentage = (stock / maxStock) * 100;
+      if (percentage > 50) return 'stock-high';
+      if (percentage > 20) return 'stock-medium';
+      if (percentage > 10) return 'stock-low';
+      return 'stock-critical';
+    }
+
+    function getStockLabel(stock, maxStock) {
+      const percentage = (stock / maxStock) * 100;
+      if (stock === 0) return 'Out of Stock';
+      if (percentage <= 10) return `Only ${stock} left!`;
+      if (percentage <= 20) return `${stock} in stock`;
+      return `${stock} available`;
+    }
+
+    function showToast(message, submessage = '', type = 'success') {
+      const toast = $('toast');
+      const icon = $('toast-icon');
+      const msg = $('toast-message');
+      const submsg = $('toast-submessage');
+      const content = $('toast-content');
+
+      const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+      const colors = { success: '#10B981', error: '#EF4444', warning: '#F59E0B', info: '#3B82F6' };
+
+      icon.textContent = icons[type] || icons.success;
+      msg.textContent = message;
+      submsg.textContent = submessage;
+      submsg.style.display = submessage ? 'block' : 'none';
+      content.style.borderLeftColor = colors[type] || colors.success;
+
+      toast.classList.remove('hidden');
+      clearTimeout(toast._hideTimeout);
+      toast._hideTimeout = setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+    }
+
+    function getProductById(id) { return PRODUCTS_DATABASE.find(p => p.id === id); }
+    function getCartQuantity(productId) {
+      const record = cartRecords.find(r => r.product_id === productId);
+      return record ? Number(record.quantity) : 0;
+    }
+    function getTotalCartItems() { return cartRecords.reduce((sum, r) => sum + Number(r.quantity), 0); }
+    function getCartSubtotal() {
+      return cartRecords.reduce((sum, r) => {
+        const product = getProductById(r.product_id);
+        return sum + (product ? product.price * Number(r.quantity) : 0);
+      }, 0);
+    }
+
+    // ============ BOUNDARY VALUE ANALYSIS ============
+    function validateStockBoundary(productId, requestedQuantity) {
+      const product = getProductById(productId);
+      const currentCartQty = getCartQuantity(productId);
+      const availableStock = currentStock[productId];
+      const totalRequested = currentCartQty + requestedQuantity;
+
+      if (requestedQuantity <= 0) {
+        return { valid: false, error: 'Invalid quantity', type: 'error' };
+      }
+      if (availableStock === 0) {
+        return { valid: false, error: 'Out of stock', type: 'error' };
+      }
+      if (totalRequested > availableStock) {
+        return { valid: false, error: `Only ${availableStock} units available`, submessage: `You already have ${currentCartQty} in cart`, type: 'warning' };
+      }
+      if (totalRequested > product.maxStock) {
+        return { valid: false, error: `Maximum ${product.maxStock} units per order`, type: 'warning' };
+      }
+      if (totalRequested >= availableStock * 0.8) {
+        return { valid: true, warning: true, message: `You're ordering ${totalRequested} of ${availableStock} available`, type: 'info' };
+      }
+      return { valid: true };
+    }
+
+    // ============ DATA API WRAPPER (calls window.dataSdk if present, else fallback) ============
+    // dataHandler is used by real dataSdk to push updates; on fallback we call it manually.
+    const dataHandler = {
+      onDataChanged(data) {
+        cartRecords = data.slice();
+        renderCart();
+        renderProducts();
+      }
+    };
+
+    const dataApi = {
+      async init(handler) {
+        // remember handler so fallback can call it
+        this._handler = handler || dataHandler;
+
+        if (window.dataSdk && typeof window.dataSdk.init === 'function') {
+          try {
+            const result = await window.dataSdk.init(this._handler);
+            return result;
+          } catch (e) {
+            return { isOk: false, error: e };
+          }
+        } else {
+          // fallback: ensure we have cartRecords (could be from localStorage)
+          try {
+            const saved = localStorage.getItem('demo_cart_records');
+            if (saved) cartRecords = JSON.parse(saved);
+            // inform UI
+            this._handler.onDataChanged(cartRecords.slice());
+            return { isOk: true };
+          } catch (e) {
+            return { isOk: false, error: e };
+          }
+        }
+      },
+
+      async create(record) {
+        if (window.dataSdk && typeof window.dataSdk.create === 'function') {
+          try {
+            const result = await window.dataSdk.create(record);
+            return result;
+          } catch (e) { return { isOk: false, error: e }; }
+        } else {
+          // fallback create: push into cartRecords
+          const existing = cartRecords.find(r => r.product_id === record.product_id);
+          if (existing) {
+            existing.quantity = Number(existing.quantity) + Number(record.quantity);
+          } else {
+            cartRecords.push({ ...record });
+          }
+          localStorage.setItem('demo_cart_records', JSON.stringify(cartRecords));
+          // simulate async
+          this._handler.onDataChanged(cartRecords.slice());
+          return { isOk: true, record: record };
+        }
+      },
+
+      async update(record) {
+        if (window.dataSdk && typeof window.dataSdk.update === 'function') {
+          try {
+            const result = await window.dataSdk.update(record);
+            return result;
+          } catch (e) { return { isOk: false, error: e }; }
+        } else {
+          const idx = cartRecords.findIndex(r => r.product_id === record.product_id);
+          if (idx >= 0) {
+            cartRecords[idx] = { ...record };
+            localStorage.setItem('demo_cart_records', JSON.stringify(cartRecords));
+            this._handler.onDataChanged(cartRecords.slice());
+            return { isOk: true, record: cartRecords[idx] };
+          } else {
+            return { isOk: false, error: 'Record not found' };
+          }
+        }
+      },
+
+      async delete(record) {
+        if (window.dataSdk && typeof window.dataSdk.delete === 'function') {
+          try {
+            const result = await window.dataSdk.delete(record);
+            return result;
+          } catch (e) { return { isOk: false, error: e }; }
+        } else {
+          const idx = cartRecords.findIndex(r => r.product_id === record.product_id);
+          if (idx >= 0) {
+            cartRecords.splice(idx, 1);
+            localStorage.setItem('demo_cart_records', JSON.stringify(cartRecords));
+            this._handler.onDataChanged(cartRecords.slice());
+            return { isOk: true };
+          } else {
+            return { isOk: false, error: 'Record not found' };
+          }
+        }
+      }
+    };
+
+    // ============ CART OPERATIONS (use dataApi, no longer require window.dataSdk) ============
+    async function addToCart(productId, quantity) {
+      if (isProcessing) return;
+      const validation = validateStockBoundary(productId, quantity);
+
+      if (!validation.valid) {
+        showToast(validation.error, validation.submessage || '', validation.type);
+        const card = document.querySelector(`[data-product-id="${productId}"]`);
+        if (card) { card.classList.add('error-shake'); setTimeout(() => card.classList.remove('error-shake'), 400); }
+        return;
+      }
+
+      isProcessing = true;
+      const product = getProductById(productId);
+      const existingRecord = cartRecords.find(r => r.product_id === productId);
+
+      if (existingRecord) {
+        const newQuantity = Number(existingRecord.quantity) + quantity;
+        const updatedRecord = { ...existingRecord, quantity: newQuantity };
+        const result = await dataApi.update(updatedRecord);
+
+        if (result.isOk) {
+          currentStock[productId] -= quantity;
+          if (validation.warning) {
+            showToast('Added to cart', validation.message, 'info');
+          } else {
+            showToast('Added to cart', `${product.name} x${quantity}`, 'success');
+          }
+        } else {
+          showToast('Failed to update cart', 'Please try again', 'error');
+        }
+      } else {
+        if (cartRecords.length >= 999) {
+          showToast('Cart limit reached', 'Maximum 999 items allowed', 'warning');
+          isProcessing = false;
+          return;
+        }
+
+        const newRecord = {
+          product_id: productId,
+          product_name: product.name,
+          quantity: quantity,
+          price: product.price,
+          added_at: new Date().toISOString()
+        };
+
+        const result = await dataApi.create(newRecord);
+
+        if (result.isOk) {
+          currentStock[productId] -= quantity;
+          showToast('Added to cart', `${product.name} x${quantity}`, 'success');
+        } else {
+          showToast('Failed to add to cart', 'Please try again', 'error');
+        }
+      }
+
+      // ensure UI updates even if underlying dataApi didn't trigger dataHandler
+      renderCart();
+      renderProducts();
+      isProcessing = false;
+    }
+
+    async function updateCartQuantity(productId, newQuantity) {
+      if (isProcessing) return;
+      const existingRecord = cartRecords.find(r => r.product_id === productId);
+      if (!existingRecord) return;
+
+      const currentQty = Number(existingRecord.quantity);
+      const delta = newQuantity - currentQty;
+
+      if (newQuantity <= 0) {
+        await removeFromCart(productId);
+        return;
+      }
+
+      if (delta > 0) {
+        const validation = validateStockBoundary(productId, delta);
+        if (!validation.valid) {
+          showToast(validation.error, validation.submessage || '', validation.type);
+          return;
+        }
+      }
+
+      isProcessing = true;
+      const updatedRecord = { ...existingRecord, quantity: newQuantity };
+      const result = await dataApi.update(updatedRecord);
+
+      if (result.isOk) {
+        currentStock[productId] -= delta;
+        showToast('Cart updated', '', 'success');
+      } else {
+        showToast('Failed to update', 'Please try again', 'error');
+      }
+
+      renderCart();
+      renderProducts();
+      isProcessing = false;
+    }
+
+    async function removeFromCart(productId) {
+      if (isProcessing) return;
+      const existingRecord = cartRecords.find(r => r.product_id === productId);
+      if (!existingRecord) return;
+
+      isProcessing = true;
+      const result = await dataApi.delete(existingRecord);
+
+      if (result.isOk) {
+        currentStock[productId] += Number(existingRecord.quantity);
+        const product = getProductById(productId);
+        showToast('Removed from cart', product.name, 'info');
+      } else {
+        showToast('Failed to remove', 'Please try again', 'error');
+      }
+
+      renderCart();
+      renderProducts();
+      isProcessing = false;
+    }
+
+    // ============ RENDERING ============
+    function renderCategories() {
+      const container = $('categories');
+      container.innerHTML = '';
+      PRODUCT_CATEGORIES.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `category-chip flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${cat.id === currentCategory ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-orange-300'}`;
+        btn.innerHTML = `<span>${cat.icon}</span><span>${cat.name}</span>`;
+        btn.addEventListener('click', () => { currentCategory = cat.id; renderCategories(); renderProducts(); });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderProducts() {
+      const grid = $('products-grid');
+      const categoryTitle = $('category-title');
+      const productCount = $('product-count');
+
+      let filtered = PRODUCTS_DATABASE.slice();
+      if (currentCategory !== 'all') filtered = filtered.filter(p => p.category === currentCategory);
+      if (searchQuery) filtered = filtered.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const catName = PRODUCT_CATEGORIES.find(c => c.id === currentCategory)?.name || 'All Products';
+      categoryTitle.textContent = catName;
+      productCount.textContent = `(${filtered.length} items)`;
+
+      grid.innerHTML = '';
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-center py-12"><div class="text-6xl mb-3">🔍</div><p class="text-gray-500 font-medium">No products found</p><p class="text-gray-400 text-sm mt-1">Try a different search or category</p></div>`;
+        return;
+      }
+
+      filtered.forEach(product => {
+        const stock = currentStock[product.id];
+        const cartQty = getCartQuantity(product.id);
+        const stockClass = getStockClass(stock, product.maxStock);
+        const stockLabel = getStockLabel(stock, product.maxStock);
+
+        const card = document.createElement('article');
+        card.className = 'product-card bg-white rounded-xl p-4 shadow-sm flex flex-col';
+        card.setAttribute('data-product-id', product.id);
+
+        card.innerHTML = `
+          <div class="product-image-placeholder w-full aspect-square mb-3"><span class="text-5xl">${product.emoji}</span></div>
+          <div class="flex-1">
+            <h3 class="font-bold text-gray-900 text-sm mb-1 line-clamp-2">${product.name}</h3>
+            <p class="text-xs text-gray-500 mb-2">${product.unit}</p>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-lg font-bold text-gray-900">${formatPrice(product.price)}</span>
+              <span class="stock-indicator ${stockClass}">${stockLabel}</span>
+            </div>
+          </div>
+          <div class="mt-auto">
+            ${cartQty > 0 ? `
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 bg-orange-50 rounded-lg px-2 py-1.5 flex-1">
+                  <button type="button" class="quantity-control w-7 h-7 flex items-center justify-center rounded-md bg-white hover:bg-orange-100 text-orange-600 font-bold text-sm transition-colors" data-action="decrease" data-product-id="${product.id}" aria-label="Decrease quantity">−</button>
+                  <span class="flex-1 text-center font-bold text-gray-900">${cartQty}</span>
+                  <button type="button" class="quantity-control w-7 h-7 flex items-center justify-center rounded-md bg-white hover:bg-orange-100 text-orange-600 font-bold text-sm transition-colors ${stock === 0 ? 'opacity-50 cursor-not-allowed' : ''}" data-action="increase" data-product-id="${product.id}" aria-label="Increase quantity" ${stock === 0 ? 'disabled' : ''}>+</button>
+                </div>
+                <button type="button" class="text-red-500 hover:text-red-600 p-2" data-action="remove" data-product-id="${product.id}" aria-label="Remove from cart">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </div>
+            ` : `
+              <button type="button" class="add-button w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors ${stock === 0 ? 'opacity-50 cursor-not-allowed' : ''}" data-action="add" data-product-id="${product.id}" ${stock === 0 ? 'disabled' : ''}>${stock === 0 ? 'Out of Stock' : 'Add to Cart'}</button>
+            `}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Add event listeners (rebind each render)
+      grid.querySelectorAll('[data-action="add"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const productId = e.currentTarget.getAttribute('data-product-id');
+          addToCart(productId, 1);
+        });
+      });
+      grid.querySelectorAll('[data-action="increase"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const productId = e.currentTarget.getAttribute('data-product-id');
+          addToCart(productId, 1);
+        });
+      });
+      grid.querySelectorAll('[data-action="decrease"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const productId = e.currentTarget.getAttribute('data-product-id');
+          const currentQty = getCartQuantity(productId);
+          updateCartQuantity(productId, currentQty - 1);
+        });
+      });
+      grid.querySelectorAll('[data-action="remove"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const productId = e.currentTarget.getAttribute('data-product-id');
+          removeFromCart(productId);
+        });
+      });
+    }
+
+    function renderCart() {
+      const container = $('cart-items');
+      const emptyCart = $('empty-cart');
+      const badge = $('cart-badge');
+      const itemCount = $('cart-item-count');
+      const subtotal = $('cart-subtotal');
+      const handling = $('cart-handling');
+      const total = $('cart-total');
+      const checkoutBtn = $('checkout-btn');
+
+      const totalItems = getTotalCartItems();
+      const subtotalAmount = getCartSubtotal();
+      const handlingFee = totalItems > 0 ? 5 : 0;
+      const totalAmount = subtotalAmount + handlingFee;
+
+      badge.textContent = totalItems;
+      itemCount.textContent = `${totalItems} item${totalItems !== 1 ? 's' : ''}`;
+      subtotal.textContent = formatPrice(subtotalAmount);
+      handling.textContent = formatPrice(handlingFee);
+      total.textContent = formatPrice(totalAmount);
+      checkoutBtn.disabled = totalItems === 0;
+
+      if (totalItems === 0) {
+        emptyCart.style.display = 'block';
+        container.querySelectorAll('.cart-item').forEach(item => item.remove());
+        return;
+      }
+
+      emptyCart.style.display = 'none';
+
+      const existingItems = new Map();
+      container.querySelectorAll('.cart-item').forEach(item => {
+        const id = item.getAttribute('data-cart-id');
+        existingItems.set(id, item);
+      });
+
+      cartRecords.forEach(record => {
+        const product = getProductById(record.product_id);
+        if (!product) return;
+        const itemTotal = product.price * Number(record.quantity);
+
+        if (existingItems.has(record.product_id)) {
+          const item = existingItems.get(record.product_id);
+          item.querySelector('.cart-item-qty').textContent = record.quantity;
+          item.querySelector('.cart-item-total').textContent = formatPrice(itemTotal);
+          existingItems.delete(record.product_id);
+        } else {
+          const item = document.createElement('div');
+          item.className = 'cart-item bg-gray-50 rounded-lg p-3 flex items-center gap-3';
+          item.setAttribute('data-cart-id', record.product_id);
+          item.innerHTML = `
+            <div class="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">${product.emoji}</div>
+            <div class="flex-1 min-w-0">
+              <h4 class="font-semibold text-sm text-gray-900 truncate">${product.name}</h4>
+              <p class="text-xs text-gray-500">${formatPrice(product.price)} × <span class="cart-item-qty">${record.quantity}</span></p>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <p class="font-bold text-sm text-gray-900 cart-item-total">${formatPrice(itemTotal)}</p>
+            </div>
+          `;
+          container.appendChild(item);
+        }
+      });
+
+      existingItems.forEach(item => item.remove());
+    }
+
+    // ============ ELEMENT / DATA SDK INIT ============
+    function applyConfig(config) {
+      const cfg = { ...defaultConfig, ...config };
+      document.body.style.backgroundColor = cfg.background_color;
+      if ($('store-name')) $('store-name').textContent = cfg.store_name;
+      if ($('delivery-tagline')) $('delivery-tagline').textContent = cfg.delivery_tagline;
+      if ($('hero-title')) $('hero-title').textContent = cfg.hero_title;
+      if ($('hero-subtitle')) $('hero-subtitle').textContent = cfg.hero_subtitle;
+      if ($('cta-text')) $('cta-text').textContent = cfg.cta_text;
+      const fontStack = `${cfg.font_family}, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+      document.documentElement.style.fontFamily = fontStack;
+      const baseSize = cfg.font_size;
+      if ($('store-name')) $('store-name').style.fontSize = `${baseSize * 1.4}px`;
+      if ($('hero-title')) $('hero-title').style.fontSize = `${baseSize * 2.4}px`;
+      if ($('hero-subtitle')) $('hero-subtitle').style.fontSize = `${baseSize * 1.1}px`;
+    }
+
+    function mapToCapabilities(config) {
+      const cfg = window.elementSdk ? window.elementSdk.config : { ...defaultConfig, ...config };
+      return {
+        recolorables: [
+          { get: () => cfg.background_color || defaultConfig.background_color, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ background_color: value }); } },
+          { get: () => cfg.surface_color || defaultConfig.surface_color, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ surface_color: value }); } },
+          { get: () => cfg.text_color || defaultConfig.text_color, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ text_color: value }); } },
+          { get: () => cfg.primary_action_color || defaultConfig.primary_action_color, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ primary_action_color: value }); } },
+          { get: () => cfg.secondary_action_color || defaultConfig.secondary_action_color, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ secondary_action_color: value }); } }
+        ],
+        borderables: [],
+        fontEditable: { get: () => cfg.font_family || defaultConfig.font_family, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ font_family: value }); } },
+        fontSizeable: { get: () => cfg.font_size || defaultConfig.font_size, set: (value) => { if (window.elementSdk) window.elementSdk.setConfig({ font_size: value }); } }
+      };
+    }
+
+    function mapToEditPanelValues(config) {
+      const cfg = config || {};
+      return new Map([
+        ['store_name', cfg.store_name || defaultConfig.store_name],
+        ['delivery_tagline', cfg.delivery_tagline || defaultConfig.delivery_tagline],
+        ['hero_title', cfg.hero_title || defaultConfig.hero_title],
+        ['hero_subtitle', cfg.hero_subtitle || defaultConfig.hero_subtitle],
+        ['cta_text', cfg.cta_text || defaultConfig.cta_text]
+      ]);
+    }
+
+    async function initElementSdk() {
+      if (!window.elementSdk) {
+        applyConfig(defaultConfig);
+        return;
+      }
+      window.elementSdk.init({ defaultConfig, onConfigChange: applyConfig, mapToCapabilities, mapToEditPanelValues });
+    }
+
+    // ============ EVENT LISTENERS ============
+    function initEventListeners() {
+      const searchForm = $('search-form');
+      const searchInput = $('search-input');
+      const searchFormMobile = $('search-form-mobile');
+      const searchInputMobile = $('search-input-mobile');
+
+      if (searchForm) searchForm.addEventListener('submit', e => e.preventDefault());
+      if (searchFormMobile) searchFormMobile.addEventListener('submit', e => e.preventDefault());
+
+      [searchInput, searchInputMobile].forEach(input => {
+        if (input) input.addEventListener('input', (e) => { searchQuery = e.target.value.trim(); renderProducts(); });
+      });
+
+      const cartBtn = $('cart-btn');
+      if (cartBtn) cartBtn.addEventListener('click', () => {
+        const cartSection = document.querySelector('aside');
+        if (cartSection) cartSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      const ctaBtn = $('cta-button');
+      if (ctaBtn) ctaBtn.addEventListener('click', () => {
+        const productsSection = $('products-grid');
+        if (productsSection) productsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      const checkoutBtn = $('checkout-btn');
+      if (checkoutBtn) checkoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (getTotalCartItems() > 0) showToast('Checkout Demo', 'This is a demo store - no real orders', 'info');
+      });
+    }
+
+    // ============ INITIALIZATION ============
+    async function initDataSdk() {
+      const result = await dataApi.init(dataHandler);
+      if (!result.isOk) {
+        showToast('Connection error', 'Could not connect to data store (fallback to demo mode)', 'warning');
+      }
+    }
+
+    function init() {
+      renderCategories();
+      renderProducts();
+      renderCart();
+      initEventListeners();
+      initElementSdk();
+      initDataSdk();
+    }
+
+    // Start app
+    init();
+  </script>
+ </body>
+</html>
